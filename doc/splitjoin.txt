@@ -1,0 +1,304 @@
+==============================================================================
+CONTENTS                                      *splitjoin* *splitjoin-contents*
+
+    Installation...........................: |splitjoin-installation|
+    Usage..................................: |splitjoin-usage|
+    Ruby...................................: |splitjoin-ruby|
+    HTML...................................: |splitjoin-html|
+    Eruby..................................: |splitjoin-eruby|
+    Internals..............................: |splitjoin-internals|
+    Issues.................................: |splitjoin-issues|
+
+
+==============================================================================
+INSTALLATION                                          *splitjoin-installation*
+
+There are several ways to install the plugin. The recommended one is by using
+Tim Pope's pathogen (http://www.vim.org/scripts/script.php?script_id=2332). In
+that case, you can clone the plugin's git repository like so:
+>
+    git clone git://github.com/AndrewRadev/splitjoin.vim.git ~/.vim/bundle/splitjoin
+<
+If your vim configuration is under git version control, you could also set up
+the repository as a submodule, which would allow you to update more easily.
+The command is (provided you're in ~/.vim):
+>
+    git submodule add git://github.com/AndrewRadev/splitjoin.vim.git bundle/splitjoin
+<
+
+Another way is to simply copy all the essential directories inside the ~.vim/
+directory: plugin, ftplbugin, autoload, doc.
+
+After the plugin is installed, the command :SplitjoinSplit will perform
+splitting and :SplitjoinJoin -- joining of the code under the cursor. It's
+highly recommended to map these to keybindings, since the idea of the plugin
+is to simplify these manipulations. An example keybinding that needs to go in
+.vimrc:
+>
+    nmap <Leader>j :SplitjoinJoin<cr>
+    nmap <Leader>s :SplitjoinSplit<cr>
+<
+With these mappings, and if the <Leader> is set to, for example, "_", then
+"_j" would attempt to perform a join on the text block under the cursor and
+"_s" would perform a split on the line.
+
+My personal preference is to avoid mnemonics in this case and go for an
+approach that makes more sense to my fingers instead:
+>
+    nmap sj :SplitjoinSplit<cr>
+    nmap sk :SplitjoinJoin<cr>
+<
+Note that I'm using "sj" for splitting, not joining. To me, "splitting" a line
+results in expanding it downwards, so using "j" seems more intuitive, likewise
+for "k". Also note that the "s" key is ordinarily taken (try :help s), but I
+don't use it, so I've mapped it to <Nop>.
+
+
+==============================================================================
+USAGE                                                        *splitjoin-usage*
+
+As noted above, in |splitjoin-installation|, using the plugin consists in
+executing :SplitjoinSplit or :SplitjoinJoin on the current line, and it's
+recommended to have mappings for those commands. From now on, I'll just use
+the verbs "split" and "join" for the actions, regardless of the way you decide
+to execute them.
+
+Splitting a line consists of checking for blocks of text that the plugin knows
+how to split and, well, doing that. For example, if we have a ruby hash:
+>
+    { :one => 'two', :three => 'four' }
+<
+Then, with the cursor within the hash, we can split it to get:
+>
+    {
+      :one => 'two',
+      :three => 'four'
+    }
+<
+This works for various other things, you can see some examples for each
+filetype below.
+
+If there are several different kinds of splittings that can be executed, there
+is a fixed priority. For instance, this:
+>
+    { :one => 'two', :three => 'four' } if foo?
+<
+will be split into this:
+>
+    if foo?
+      { :one => 'two', :three => 'four' }
+    end
+<
+In this case, the plugin does not take into account where exactly the cursor
+is located on the line, it just always gives priority to the if clause.
+
+For ruby hashes in particular, the cursor position is considered, however.
+Let's take this as an example:
+>
+    foo 1, 2, { :bar => :baz }, { :baz => :qux }
+<
+If the cursor is located on the first hash, the result will be:
+>
+    foo 1, 2, {
+      :bar => :baz
+    }, { :baz => :qux }
+<
+If it's on the second hash, or on any other part of the method call (like on
+"foo"), you'll get this:
+>
+    foo 1, 2, { :bar => :baz }, {
+      :baz => :qux
+    }
+<
+In general, if you're trying to split a structure, try to "be inside" when you
+do so. This doesn't make sense in cases like the "if" statement, but it does
+for hashes.
+
+Joining might impose more constraints. Take this as an example:
+>
+    if foo?
+      bar
+    end
+<
+In order to turn this into:
+>
+    bar if foo?
+<
+you need to place your cursor on the line with the "if" clause. If your cursor
+is on the "bar" line, joining will not work. This might be considered a bug (I
+find it simpler cognitively to join blocks when I'm within them), but it
+simplifies the implementation and solves some ambiguity. This might be a nice
+example:
+>
+    if foo?
+      {
+        :one => :two,
+        :three => :four
+      }
+    end
+<
+Joining when on the line ":one => :two" would currently do nothing. However,
+if we wanted to detect the type of joining we could do, we might give priority
+to the if clause instead of the hash, which would not make a lot of sense. Of
+course, with smart prioritization (or a change in implementation), it might be
+possible to get things working sensibly, but this seems to be good enough for
+now: To join the hash, be on the "{" line, to join the "if" clause (not a good
+idea, mind you, doesn't do anything that makes sense), be on the "if foo?"
+line.
+
+The basic rule of thumb here is that, to join a structure, the cursor should
+usually be at its beginning (the opening tag, the opening brace, etc.).
+
+Now for some examples for the filetypes that have splitjoin implementations.
+
+==============================================================================
+RUBY                                                          *splitjoin-ruby*
+
+If/unless clauses ~
+>
+    return "the answer" if 6 * 9 == 42
+
+    if 6 * 9 == 42
+      return "the answer"
+    end
+<
+
+Hashes ~
+>
+    foo = { :bar => 'baz', :one => 'two' }
+
+    foo = {
+      :bar => 'baz',
+      :one => 'two'
+    }
+<
+Option hashes ~
+>
+    foo 1, 2, :one => 1, :two => 2
+
+    foo 1, 2, {
+      :one => 1,
+      :two => 2
+    }
+
+    # note that after joining, the result will be:
+
+    foo 1, 2, { :one => 1, :two => 2 }
+<
+Caching constructs  ~
+>
+    @two ||= 1 + 1
+
+    @two ||= begin
+      1 + 1
+    end
+<
+Blocks ~
+>
+    Bar.new { |b| puts b.to_s }
+
+    Bar.new do |b|
+      puts b.to_s
+    end
+<
+
+==============================================================================
+HTML                                                          *splitjoin-html*
+
+Tags ~
+>
+    <div class="foo">bar</div>
+
+    <div class="foo">
+      bar
+    </div>
+<
+
+==============================================================================
+ERUBY                                                        *splitjoin-eruby*
+
+Tags ~
+>
+    <div class="foo">bar</div>
+
+    <div class="foo">
+      bar
+    </div>
+<
+
+If/unless clauses ~
+>
+    <%= foo if bar? %>
+
+    <% if bar? %>
+      <%= foo %>
+    <% end %>
+<
+
+Hashes ~
+>
+    <% foo = { :bar => 'baz', :one => :two, :five => 'six' } %>
+
+    <% foo = {
+      :bar => 'baz',
+      :one => :two,
+      :five => 'six'
+    } %>
+<
+
+Option hashes ~
+>
+    <%= link_to 'Google', 'http://google.com', :class => 'google', :id => 'google-link' %>
+
+    <%= link_to 'Google', 'http://google.com', {
+      :class => 'google',
+      :id => 'google-link'
+    } %>
+<
+
+==============================================================================
+INTERNALS                                                *splitjoin-internals*
+
+The only interface of the plugin is in 'plugin/splitjoin.vim'. It's a fairly
+short file containing two commands, |SplitjoinSplit| and |SplitjoinJoin|.  All
+of the actual splitting and joining logic is in autoloaded files. The only
+things that these two commands do are:
+
+- Check the |b:splitjoin_join_callbacks| and |b:splitjoin_split_callbacks|
+  respectively for a list of function names.
+- Invoke the functions, in order. If any of the functions returns a number
+  different than 0, stop.
+
+The actual functions may do whatever they want, but it makes sense for them to
+return 0 only if they haven't made any modifications to the buffer.
+
+The function names could be buffer-local, global, autoloaded, anything the
+|function()| call can use.
+
+Obviously, extending the plugin is straightforward -- it's enough to define a
+function for splitting and one for joining and add those to the buffer
+variable. Of course, that doesn't imply it's easy -- the functions would need
+to actually perform all the necessary manipulations and simply inform the
+plugin if they've been successful by returning a number other than 0 as a
+result.
+
+The file 'autoload/sj.vim' contains helpers that might be useful for said
+manipulations. There are functions for replacing bodies of text defined by
+normal mode motions or by line ranges, for saving and restoring the cursor
+position and possibly other interesting functions that might assist. They
+should be commented reasonably well.
+
+The other files in 'autoload/sj' might be useful as well, although they're
+mostly filetype-specific.
+
+==============================================================================
+ISSUES                                                      *splitjoin-issues*
+
+    - Currently, splitting ruby hashes breaks when dealing with multibyte
+      characters, like japanese, joining the final line with the one below it.
+
+Any other issues and suggestions are very welcome on the github bugtracker:
+https://github.com/AndrewRadev/splitjoin.vim/issues
+
+
+vim:tw=78:sw=4:ft=help:norl:
