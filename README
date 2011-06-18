@@ -25,7 +25,7 @@ Into this:
       bar
     </div>
 
-And another binding for the opposite transformation. This currently works for various constructs in ruby and erb, and for tags in html/xml.
+And another binding for the opposite transformation. This currently works for various constructs in ruby and erb, for tags in html/xml and for CSS style declarations.
 
 For more information, try :help splitjoin, or take a look at the help file online at https://github.com/AndrewRadev/splitjoin.vim/blob/master/doc/splitjoin.txt
 
@@ -34,3 +34,4 @@ For more examples and corner cases, you can explore the "examples" directory her
 If you encounter any bugs, the issue tracker is on github, at https://github.com/AndrewRadev/splitjoin.vim/issues.
 
 This is my first vim plugin so it's certain that I've made mistakes here and there. I'd love to hear any of your comments and suggestions, so feel free to contact me by email.
+

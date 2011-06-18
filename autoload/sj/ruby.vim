@@ -44,14 +44,17 @@ endfunction
 
 function! sj#ruby#SplitBlock()
   let line    = getline('.')
-  let pattern = '\v\{(\s*\|.*\|)?\s*(.*)\}'
+  let pattern = '\v\{(\s*\|.{-}\|)?\s*(.*)\}'
 
   if line =~ pattern
-    let body = sj#ExtractRx(line, pattern, '\2')
-    let body = join(split(body, '\s*;\s*'), "\n")
-    let replacement = substitute(line, pattern, 'do\1\n'.body.'\nend', '')
+    call search('{', 'bc', line('.'))
+    call search('{', 'c', line('.'))
 
-    call sj#ReplaceMotion('V', replacement)
+    let body = sj#GetMotion('Va{')
+    let body = join(split(body, '\s*;\s*'), "\n")
+    let replacement = substitute(body, '^'.pattern.'$', 'do\1\n\2\nend', '')
+
+    call sj#ReplaceMotion('Va{', replacement)
 
     return 1
   else
@@ -60,20 +63,24 @@ function! sj#ruby#SplitBlock()
 endfunction
 
 function! sj#ruby#JoinBlock()
-  call search('\<do\>\(\s*\|.*\|\s*\)\?$', 'cW', line('.'))
-  let do_line_no = search('\<do\>\(\s*\|.*\|\s*\)\?$', 'bcW', line('.'))
+  let do_pattern = '\<do\>\(\s*|.*|\s*\)\?$'
+
+  let do_line_no = search(do_pattern, 'cW', line('.'))
+  if do_line_no <= 0
+    let do_line_no = search(do_pattern, 'bcW', line('.'))
+  endif
 
   if do_line_no > 0
-    let end_line_no = searchpair('\<do\>', '', '\<end\>', 'W')
+    let end_line_no = searchpair(do_pattern, '', '\<end\>', 'W')
 
     let lines = map(sj#GetLines(do_line_no, end_line_no), 'sj#Trim(v:val)')
 
-    let do_line  = substitute(lines[0], 'do', '{', '')
+    let do_line  = substitute(lines[0], do_pattern, '{\1', '')
     let body     = join(lines[1:-2], '; ')
     let body     = sj#Trim(body)
-    " ignore end line, not needed
+    let end_line = substitute(lines[-1], 'end', '}', '')
 
-    let replacement = do_line.' '.body.' }'
+    let replacement = do_line.' '.body.' '.end_line
 
     call sj#ReplaceLines(do_line_no, end_line_no, replacement)
 
@@ -158,9 +165,6 @@ function! sj#ruby#SplitOptions()
       " no options found, leave it as it is
       return 0
     endif
-
-    let args = map(args, 'sj#Trim(v:val)')
-    let opts = map(opts, 'sj#Trim(v:val)')
 
     let replacement = ''
 

@@ -47,6 +47,9 @@ function! s:Process() dict
     call self.push_arg()
   endif
   call self.expand_option_hash()
+
+  let self.args = map(self.args, 'sj#Trim(v:val)')
+  let self.opts = map(self.opts, 'sj#Trim(v:val)')
 endfunction
 
 " Pushes the current argument either to the args or opts stack and initializes
@@ -189,10 +192,10 @@ function! sj#rubyparse#LocateFunction()
   "
   "   - a keyword
   "   - spaces or an opening round bracket
-  "   - something that's not a comma or an "=" sign (to avoid detecting
-  "     assignment by mistake)
+  "   - something that's not a comma and doesn't look like an operator
+  "     (to avoid a few edge cases)
   "
-  let pattern = '\v(^|\s|\.|::)\k+[?!]?(\s+|\s*\(\s*)[^,=]'
+  let pattern = '\v(^|\s|\.|::)\k+[?!]?(\s+|\s*\(\s*)[^,=<>+-/*^%]'
   let found = search(pattern, 'bcWe', line('.'))
   if found <= 0
     " try searching forward
