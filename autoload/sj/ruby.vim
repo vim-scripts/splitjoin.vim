@@ -139,6 +139,13 @@ function! sj#ruby#JoinHash()
 
   if line =~ pattern
     normal! $
+
+    if g:splitjoin_normalize_whitespace
+      let body = sj#GetMotion('Vi{',)
+      let body = substitute(body, '\s\+=>\s\+', ' => ', 'g')
+      call sj#ReplaceMotion('Vi{', body)
+    endif
+
     normal! Va{J
 
     return 1
@@ -176,6 +183,12 @@ function! sj#ruby#SplitOptions()
     let replacement .= "\n}"
 
     call sj#ReplaceCols(from, to, replacement)
+
+    if g:splitjoin_align
+      let alignment_start = line('.') + 1
+      let alignment_end   = alignment_start + len(opts) - 1
+      call sj#Align(alignment_start, alignment_end, 'ruby_hash')
+    endif
 
     return 1
   else

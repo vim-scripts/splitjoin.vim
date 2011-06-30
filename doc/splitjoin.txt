@@ -7,6 +7,7 @@ CONTENTS                                      *splitjoin* *splitjoin-contents*
     HTML...................................: |splitjoin-html|
     CSS....................................: |splitjoin-css|
     Eruby..................................: |splitjoin-eruby|
+    Settings...............................: |splitjoin-settings|
     Internals..............................: |splitjoin-internals|
     Issues.................................: |splitjoin-issues|
 
@@ -285,6 +286,86 @@ Option hashes ~
 <
 
 ==============================================================================
+SETTINGS                                                  *splitjoin-settings*
+
+These are the variables that control the behaviour of the plugin.
+
+
+                                                 *b:splitjoin_join_callbacks*
+                                                 *b:splitjoin_split_callbacks*
+>
+    b:splitjoin_join_callbacks
+    b:splitjoin_split_callbacks
+<
+These two variables contain lists of functions that are called to execute the
+splitting or joining functionality. If they are set to an empty array in a
+particular file, this will effectively disable the plugin for it.
+
+Default value: depends on the filetype
+
+Example:
+Putting the following in ftplugin/ruby.vim will disable the join functionality
+for ruby files:
+>
+    let b:splitjoin_join_callbacks = []
+<
+
+                                            *g:splitjoin_normalize_whitespace*
+>
+    g:splitjoin_normalize_whitespace
+<
+This variable controls whether duplicate whitespace should be reduced within a
+joined structure, which makes a lot of sense in some situations, particularly
+when the items are aligned. Set it to 1 to activate.
+
+Currently works for ruby hashes and CSS style definitions.
+
+Default value: 0
+
+Example:
+Setting the variable to 1 will reduce the extra whitespace around "=>" symbols
+in ruby hashes:
+>
+    one = {
+      :one   => 'two',
+      :three => 'four',
+      :a     => 'b'
+    }
+
+    one = { :one => 'two', :three => 'four', :a => 'b' }
+<
+
+                                                           *g:splitjoin_align*
+>
+    g:splitjoin_align
+<
+This is a flag that controls whether a few constructs should be aligned by a
+certain character. As a specific example, when you split ruby hashes, this can
+align them by the "=>" signs. In a way, |g:splitjoin_normalize_whitespace| is
+a complement to this setting, since you'd probably want to reduce the extra
+whitespace when joining.
+
+Set the flag to 1 to attempt alignment. In order for it to work, it requires
+that you have either Tabular (https://github.com/godlygeek/tabular) or Align
+(http://www.vim.org/scripts/script.php?script_id=294) installed. If that's not
+the case, the value of this setting will be ignored.
+
+Currently works for ruby hashes and CSS style definitions.
+
+Default value: 0
+
+Example:
+>
+    one = { :one => 'two', :three => 'four', :a => 'b' }
+
+    one = {
+      :one   => 'two',
+      :three => 'four',
+      :a     => 'b'
+    }
+<
+
+==============================================================================
 INTERNALS                                                *splitjoin-internals*
 
 The only interface of the plugin is in 'plugin/splitjoin.vim'. It's a fairly
@@ -324,6 +405,8 @@ ISSUES                                                      *splitjoin-issues*
 
     - Currently, splitting ruby hashes breaks when dealing with multibyte
       characters, like japanese, joining the final line with the one below it.
+    - If |g:splitjoin_align| is truthy and the Align plugin is being used, the
+      "undo" action undoes only the alignment first, then the splitting.
 
 Any other issues and suggestions are very welcome on the github bugtracker:
 https://github.com/AndrewRadev/splitjoin.vim/issues

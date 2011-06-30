@@ -17,6 +17,12 @@ function! sj#css#SplitDefinition()
 
   call sj#ReplaceMotion('Va{', "{\n".body."\n}")
 
+  if g:splitjoin_align
+    let alignment_start = line('.') + 1
+    let alignment_end   = alignment_start + len(lines) - 1
+    call sj#Align(alignment_start, alignment_end, 'css_declaration')
+  endif
+
   return 1
 endfunction
 
@@ -34,6 +40,9 @@ function! sj#css#JoinDefinition()
   let lines = split(body, ";\s*\n")
   let lines = map(lines, 'sj#Trim(v:val)')
   let lines = filter(lines, 'v:val !~ "^\s*$"')
+  if g:splitjoin_normalize_whitespace
+    let lines = map(lines, "substitute(v:val, '\\s*:\\s\\+', ': ', '')")
+  endif
 
   let body = join(lines, "; ")
   let body = substitute(body, ';\?$', ';', '')

@@ -6,11 +6,19 @@ let g:loaded_splitjoin = '0.1.1' " version number
 let s:keepcpo          = &cpo
 set cpo&vim
 
+if !exists('g:splitjoin_normalize_whitespace')
+  let g:splitjoin_normalize_whitespace = 0
+endif
+
+if !exists('g:splitjoin_align')
+  let g:splitjoin_align = 0
+end
+
 " Public Interface:
 " =================
 
-command! SplitjoinSplit call s:Split()
-command! SplitjoinJoin  call s:Join()
+command! SplitjoinSplit call s:Split() | silent! call repeat#set(':SplitjoinSplit<cr>')
+command! SplitjoinJoin  call s:Join() | silent! call repeat#set(':SplitjoinJoin<cr>')
 
 " Internal Functions:
 " ===================
