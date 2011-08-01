@@ -186,41 +186,60 @@ endfunction
 " files.
 
 function! sj#Align(from, to, type)
+  if a:from == a:to
+    return
+  endif
+
   if exists('g:tabular_loaded')
-    call sj#PushCursor()
     call s:Tabularize(a:from, a:to, a:type)
-    call sj#PopCursor()
   elseif exists('g:loaded_AlignPlugin')
-    call sj#PushCursor()
     call s:Align(a:from, a:to, a:type)
-    call sj#PopCursor()
   endif
 endfunction
 
 function! s:Tabularize(from, to, type)
-  call cursor(a:from, 0)
-
   if a:type == 'ruby_hash'
     let pattern = '^[^=>]*\zs=>'
-  elseif a:type == 'css_declaration'
-    let pattern = ':\s*\zs\s/l0'
+  elseif a:type == 'css_declaration' || a:type == 'js_hash'
+    let pattern = '^[^:]*:\s*\zs\s/l0'
   else
     return
   endif
 
-  exe "normal! V".(a:to - a:from)."j:Tabularize/".pattern."\<cr>"
+  exe a:from.",".a:to."Tabularize/".pattern
 endfunction
 
 function! s:Align(from, to, type)
-  call cursor(a:from, 0)
-
   if a:type == 'ruby_hash'
     let pattern = 'l: =>'
-  elseif a:type == 'css_declaration'
+  elseif a:type == 'css_declaration' || a:type == 'js_hash'
     let pattern = 'lp0W0 :\s*\zs'
   else
     return
   endif
 
-  exe "normal! V".(a:to - a:from)."j:Align! ".pattern."\<cr>"
+  exe a:from.",".a:to."Align! ".pattern
+endfunction
+
+" Returns a pair with the column positions of the closest opening and closing
+" curly braces on the current line, provided the cursor is within them.
+"
+" If a pair is not found on the line, returns [-1, -1]
+function! sj#LocateCurlyBracesOnLine()
+  let [_bufnum, line, col, _off] = getpos('.')
+
+  if getline('.') !~ '{.*}'
+    return [-1, -1]
+  endif
+
+  let found = searchpair('{', '', '}', 'cb', '', line('.'))
+  if found > 0
+    let from = col('.') - 1
+    normal! %
+    let to = col('.')
+
+    return [from, to]
+  else
+    return [-1, -1]
+  endif
 endfunction
