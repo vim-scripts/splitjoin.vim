@@ -2,7 +2,7 @@ if exists("g:loaded_splitjoin") || &cp
   finish
 endif
 
-let g:loaded_splitjoin = '0.2.1' " version number
+let g:loaded_splitjoin = '0.2.2' " version number
 let s:keepcpo          = &cpo
 set cpo&vim
 
@@ -39,7 +39,7 @@ function! s:Split()
 
   for callback in b:splitjoin_split_callbacks
     if call(callback, []) != 0
-      silent! call repeat#set(':SplitjoinSplit<cr>')
+      silent! call repeat#set(":SplitjoinSplit\<cr>")
       break
     endif
   endfor
@@ -59,7 +59,7 @@ function! s:Join()
 
   for callback in b:splitjoin_join_callbacks
     if call(callback, []) != 0
-      silent! call repeat#set(':SplitjoinJoin<cr>')
+      silent! call repeat#set(":SplitjoinJoin\<cr>")
       break
     endif
   endfor

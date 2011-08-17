@@ -25,7 +25,12 @@ Into this:
       bar
     </div>
 
-And another binding for the opposite transformation. This currently works for various constructs in ruby and erb, for tags in html/xml and for CSS style declarations.
+And another binding for the opposite transformation. This currently works for:
+  * various constructs in ruby and erb
+  * python dicts and simple statements
+  * javascript object literals
+  * tags in HTML/XML
+  * CSS style declarations.
 
 For more information, try :help splitjoin, or take a look at the help file online at https://github.com/AndrewRadev/splitjoin.vim/blob/master/doc/splitjoin.txt
 
