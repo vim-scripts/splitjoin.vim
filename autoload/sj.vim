@@ -53,7 +53,9 @@ endfunction
 " Replace the normal mode "motion" with "text". This is mostly just a wrapper
 " for a normal! command with a paste, but doesn't pollute any registers.
 "
-" Example: call sj#ReplaceMotion('Va{', 'some text')
+"   Examples:
+"     call sj#ReplaceMotion('Va{', 'some text')
+"     call sj#ReplaceMotion('V', 'replacement line')
 "
 " Note that the motion needs to include a visual mode key, like "V", "v" or
 " "gv"
@@ -186,7 +188,7 @@ endfunction
 " files.
 
 function! sj#Align(from, to, type)
-  if a:from == a:to
+  if a:from >= a:to
     return
   endif
 
@@ -200,7 +202,7 @@ endfunction
 function! s:Tabularize(from, to, type)
   if a:type == 'ruby_hash'
     let pattern = '^[^=>]*\zs=>'
-  elseif a:type == 'css_declaration' || a:type == 'js_hash'
+  elseif a:type == 'css_declaration' || a:type == 'js_hash' || a:type == 'ruby_new_hash'
     let pattern = '^[^:]*:\s*\zs\s/l0'
   else
     return
@@ -212,7 +214,7 @@ endfunction
 function! s:Align(from, to, type)
   if a:type == 'ruby_hash'
     let pattern = 'l: =>'
-  elseif a:type == 'css_declaration' || a:type == 'js_hash'
+  elseif a:type == 'css_declaration' || a:type == 'js_hash' || a:type == 'ruby_new_hash'
     let pattern = 'lp0W0 :\s*\zs'
   else
     return
@@ -242,4 +244,25 @@ function! sj#LocateCurlyBracesOnLine()
   else
     return [-1, -1]
   endif
+endfunction
+
+" Removes all extra whitespace on the current line. Such is often left when
+" joining lines that have been aligned.
+"
+"   Example:
+"
+"     var one = { one:   "two", three: "four" };
+"     " turns into:
+"     var one = { one: "two", three: "four" };
+"
+function! sj#CompressWhitespaceOnLine()
+  call sj#PushCursor()
+
+  s/\S\zs \+/ /g
+
+  " Don't leave a history entry
+  call histdel('search', -1)
+  let @/ = histget('search', -1)
+
+  call sj#PopCursor()
 endfunction

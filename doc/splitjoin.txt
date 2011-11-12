@@ -5,9 +5,12 @@ CONTENTS                                      *splitjoin* *splitjoin-contents*
     Usage..................................: |splitjoin-usage|
     Ruby...................................: |splitjoin-ruby|
     Python.................................: |splitjoin-python|
+    Lua....................................: |splitjoin-lua|
     Javascript.............................: |splitjoin-javascript|
+    Vimscript..............................: |splitjoin-vimscript|
     HTML...................................: |splitjoin-html|
     CSS....................................: |splitjoin-css|
+    YAML...................................: |splitjoin-yaml|
     Eruby..................................: |splitjoin-eruby|
     Settings...............................: |splitjoin-settings|
     Internals..............................: |splitjoin-internals|
@@ -31,7 +34,7 @@ The command is (provided you're in ~/.vim):
 <
 
 Another way is to simply copy all the essential directories inside the ~.vim/
-directory: plugin, ftplbugin, autoload, doc.
+directory: plugin, ftplugin, autoload, doc.
 
 After the plugin is installed, the command :SplitjoinSplit will perform
 splitting and :SplitjoinJoin -- joining of the code under the cursor. It's
@@ -242,7 +245,34 @@ Statements ~
 <
 
 ==============================================================================
+LUA                                                            *splitjoin-lua*
+
+For lua, only splitting and joining functions is implemented at this point.
+Note that joining a function attempts to connect the lines of the body by
+using ";". This doesn't always work -- a few constructs are not syntactically
+valid if joined in this way. Still, the idea is to inline small functions, so
+this shouldn't be a big issue.
+
+Functions ~
+>
+    function example ()
+      print("foo")
+      print("bar")
+    end
+
+    function example () print("foo"); print("bar") end
+
+    local something = other(function (one, two)
+      print("foo")
+    end)
+
+    local something = other(function (one, two) print("foo") end)
+<
+
+==============================================================================
 JAVASCRIPT                                              *splitjoin-javascript*
+
+Objects ~
 
 Just like in ruby and python, the cursor needs to be inside the object in
 order to split it.
@@ -252,8 +282,6 @@ that kind of content, you could simply set the filetype to "javascript". If
 you're using a plugin to set a specific "json" filetype instead, you could
 copy the "ftplugin/javascript/splitjoin.vim" file's contents into a
 "ftplugin/json.vim" file.
-
-Objects ~
 >
     var one = { one: "two", three: "four" };
 
@@ -262,6 +290,55 @@ Objects ~
       three: "four"
     };
 <
+Functions ~
+
+When the cursor is on the "function" keyword, the script attempts to split the
+curly braces of the function. This is a bit more convenient for the common
+use-case of one-line to multi-line functions. Joining functions also works,
+because it falls back to the above object joining.
+>
+    var callback = function (something, other) { something_else; };
+
+    var callback = function (something, other) {
+      something_else;
+    };
+<
+
+==============================================================================
+VIMSCRIPT                                                *splitjoin-vimscript*
+
+Vimscript can generally be split anywhere by simply placing the remainder of
+the line on the next one, prefixed by a backslash. That's why joining is
+fairly easy to do for the most general case -- anything that is followed by a
+line, starting with a backslash, can be joined with the current one.
+
+>
+    let example_one = {
+        \ 'one': 'two',
+        \ 'three': 'four'
+        \ }
+
+    " is joined into:
+
+    let example_one = { 'one': 'two', 'three': 'four' }
+
+    command! Foo if one |
+        \   'two'     |
+        \ else        |
+        \   'three'   |
+        \ endif
+
+    " is joined into:
+
+    command! Foo if one | 'two' | else | 'three' | endif
+<
+
+Splitting is a bit trickier, since anything can be split at any point. While
+it's possible to handle some specific cases like dictionaries, arrays, and
+commands, for now the plugin takes the simple approach of splitting precisely
+where the cursor is right now. In the future, this may be replaced with
+specific splits based on the context.
+
 
 ==============================================================================
 HTML                                                          *splitjoin-html*
@@ -300,6 +377,24 @@ Multiline selectors ~
       font-size: 18px;
       font-weight: bold
     }
+<
+
+==============================================================================
+YAML                                                           *splitjoin-yaml*
+
+Arrays ~
+>
+    root:
+      one: [1, 2]
+      two: ['three', 'four']
+
+    root:
+      one:
+        - 1
+        - 2
+      two:
+        - 'three'
+        - 'four'
 <
 
 ==============================================================================

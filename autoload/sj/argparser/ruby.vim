@@ -5,6 +5,8 @@ function! sj#argparser#ruby#Construct(start_index, end_index, line)
   let parser = sj#argparser#common#Construct(a:start_index, a:end_index, a:line)
 
   call extend(parser, {
+        \ 'hash_type': '',
+        \
         \ 'Process':          function('sj#argparser#ruby#Process'),
         \ 'PushArg':          function('sj#argparser#ruby#PushArg'),
         \ 'AtFunctionEnd':    function('sj#argparser#ruby#AtFunctionEnd'),
@@ -40,6 +42,18 @@ function! sj#argparser#ruby#Process() dict
       endif
     elseif self.body =~ '^=>'
       let self.current_arg_type = 'option'
+      if sj#BlankString(self.hash_type)
+        let self.hash_type = 'classic'
+      elseif self.hash_type == 'new'
+        let self.hash_type = 'mixed'
+      endif
+    elseif self.body =~ '^\k:'
+      let self.current_arg_type = 'option'
+      if sj#BlankString(self.hash_type)
+        let self.hash_type = 'new'
+      elseif self.hash_type == 'classic'
+        let self.hash_type = 'mixed'
+      endif
       call self.PushChar()
     endif
 
@@ -71,14 +85,17 @@ function! sj#argparser#ruby#ExpandOptionHash() dict
   if len(self.opts) <= 0 && len(self.args) > 0
     " then try parsing the last parameter
     let last = self.args[-1]
-    if last =~ '^{.*=>.*}$'
+    let hash_pattern = '^{\(.*\(=>\|\k:\).*\)}$'
+
+    if last =~ hash_pattern
       " then it seems to be a hash, expand it
       call remove(self.args, -1)
 
-      let hash = sj#ExtractRx(last, '^{\(.*=>.*\)}$', '\1')
+      let hash = sj#ExtractRx(last, hash_pattern, '\1')
 
-      let [_from, _to, _args, opts] = sj#argparser#ruby#ParseArguments(0, -1, hash)
+      let [_from, _to, _args, opts, hash_type] = sj#argparser#ruby#ParseArguments(0, -1, hash)
       call extend(self.opts, opts)
+      let self.hash_type = hash_type
     endif
   endif
 endfunction
@@ -133,5 +150,5 @@ endfunction
 function! sj#argparser#ruby#ParseArguments(start_index, end_index, line)
   let parser = sj#argparser#ruby#Construct(a:start_index, a:end_index, a:line)
   call parser.Process()
-  return [ a:start_index + 1, parser.index, parser.args, parser.opts ]
+  return [ a:start_index + 1, parser.index, parser.args, parser.opts, parser.hash_type ]
 endfunction

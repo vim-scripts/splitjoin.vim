@@ -1,12 +1,11 @@
 if !exists('b:splitjoin_split_callbacks')
   let b:splitjoin_split_callbacks = [
-        \ 'sj#js#SplitObjectLiteral',
-        \ 'sj#js#SplitFunction'
+        \ 'sj#yaml#SplitArray'
         \ ]
 endif
 
 if !exists('b:splitjoin_join_callbacks')
   let b:splitjoin_join_callbacks = [
-        \ 'sj#js#JoinObjectLiteral'
+        \ 'sj#yaml#JoinArray'
         \ ]
 endif

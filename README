@@ -31,6 +31,9 @@ And another binding for the opposite transformation. This currently works for:
   * javascript object literals
   * tags in HTML/XML
   * CSS style declarations.
+  * YAML arrays
+  * lua functions
+  * vimscript line continuations
 
 For more information, try :help splitjoin, or take a look at the help file online at https://github.com/AndrewRadev/splitjoin.vim/blob/master/doc/splitjoin.txt
 
