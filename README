@@ -26,20 +26,18 @@ Into this:
     </div>
 
 And another binding for the opposite transformation. This currently works for:
-  * various constructs in ruby and erb
-  * python dicts and simple statements
-  * javascript object literals
-  * tags in HTML/XML
-  * CSS style declarations.
+  * Various constructs in Ruby and Eruby
+  * Various constructs in Coffeescript
+  * Python dicts and simple statements
+  * Javascript object literals
+  * Tags in HTML/XML
+  * CSS, SCSS, LESS style declarations.
   * YAML arrays
-  * lua functions
-  * vimscript line continuations
+  * Lua functions
+  * Vimscript line continuations
 
 For more information, try :help splitjoin, or take a look at the help file online at https://github.com/AndrewRadev/splitjoin.vim/blob/master/doc/splitjoin.txt
 
 For more examples and corner cases, you can explore the "examples" directory here: https://github.com/AndrewRadev/splitjoin.vim/tree/master/examples. It's not present in the downloadable zip file to avoid cluttering your vimfiles with useless stuff.
 
-If you encounter any bugs, the issue tracker is on github, at https://github.com/AndrewRadev/splitjoin.vim/issues.
-
-This is my first vim plugin so it's certain that I've made mistakes here and there. I'd love to hear any of your comments and suggestions, so feel free to contact me by email.
-
+If you encounter any bugs or have an idea for a new feature, the issue tracker is on github, at https://github.com/AndrewRadev/splitjoin.vim/issues.
