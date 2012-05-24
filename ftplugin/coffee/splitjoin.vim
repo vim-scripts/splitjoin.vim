@@ -1,5 +1,6 @@
 if !exists('b:splitjoin_split_callbacks')
   let b:splitjoin_split_callbacks = [
+        \ 'sj#coffee#SplitTernaryClause',
         \ 'sj#coffee#SplitString',
         \ 'sj#coffee#SplitFunction',
         \ 'sj#coffee#SplitIfClause',

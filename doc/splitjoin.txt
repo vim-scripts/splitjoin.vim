@@ -5,6 +5,7 @@ CONTENTS                                      *splitjoin* *splitjoin-contents*
     Usage..................................: |splitjoin-usage|
     Ruby...................................: |splitjoin-ruby|
     Python.................................: |splitjoin-python|
+    Perl...................................: |splitjoin-perl|
     Coffeescript...........................: |splitjoin-coffee|
     Lua....................................: |splitjoin-lua|
     Javascript.............................: |splitjoin-javascript|
@@ -163,7 +164,7 @@ Now for some examples for the filetypes that have splitjoin implementations.
 ==============================================================================
 RUBY                                                          *splitjoin-ruby*
 
-If/unless clauses ~
+If/unless/while/until clauses ~
 
 Joining works for more-than-one-line "if" clauses as well, but it doesn't look
 very pretty. It's generally recommended to use it only when the body is a
@@ -247,6 +248,38 @@ Statements ~
 <
 
 ==============================================================================
+PERL                                                          *splitjoin-perl*
+
+If/unless/while/until clauses ~
+
+The variable |g:splitjoin_perl_brace_on_same_line| controls the format of the
+curly braces when joining. If it's set to 0, the opening curly brace will be
+on its own line. Otherwise, it'll be placed on the same line as the if-clause
+(the default behaviour).
+
+>
+    print "a = $a\n" if $debug;
+
+    if ($debug) {
+      print "a = $a\n";
+    }
+<
+
+And/or clauses ~
+
+It only makes sense to split these -- joining results in joining an if/unless
+clause. variable |g:splitjoin_perl_brace_on_same_line| affects the results
+just like explained above.
+
+>
+    open PID, ">", $pidfile or die;
+
+    unless (open PID, ">", $pidfile) {
+      die;
+    }
+<
+
+==============================================================================
 COFFEESCRIPT                                                *splitjoin-coffee*
 
 Functions ~
@@ -270,6 +303,18 @@ the suffix format.
     if foo?
       console.log bar
 <
+Ternary operator ~
+
+Only splitting is available at this time, since joining an if-else clause into
+a ternary operator is a bit more complicated.
+>
+    foo = if bar? then 'baz' else 'qux'
+
+    if bar?
+      foo = 'baz'
+    else
+      foo = 'qux'
+<
 Object literals ~
 >
     one = { one: "two", three: "four" }
@@ -279,6 +324,10 @@ Object literals ~
       three: "four"
 <
 Multiline strings ~
+
+Note that strings are split only at the end of the line. This seems to be the
+most common case, and the restriction avoids conflicts with other kinds of
+splitting.
 >
     foo = "example with #{interpolation} and \"nested\" quotes"
     foo = """
@@ -646,6 +695,28 @@ Doing that with |g:splitjoin_coffee_suffix_if_clause| set to 0 would result
 in:
 >
     if foo? then console.log bar
+<
+
+                                         *g:splitjoin_perl_brace_on_same_line*
+>
+    g:splitjoin_perl_brace_on_same_line
+<
+
+Default value: 1
+
+This flag controls the placement of curly braces when joining if-clauses. When
+it's 1 (the default), the opening brace will be placed on the same line:
+>
+    if ($debug) {
+      print "a = $a\n";
+    }
+<
+If it's set to 0, the brace will get its own line:
+>
+    if ($debug)
+    {
+      print "a = $a\n";
+    }
 <
 
 ==============================================================================

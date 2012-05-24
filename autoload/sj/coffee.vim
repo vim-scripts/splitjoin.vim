@@ -1,10 +1,10 @@
 function! sj#coffee#SplitFunction()
   let line = getline('.')
 
-  if line !~ '->'
+  if line !~ '[-=]>'
     return 0
   else
-    s/->\s*/->\r/
+    s/\([-=]\)>\s*/\1>\r/
     normal! ==
     return 1
   endif
@@ -13,10 +13,10 @@ endfunction
 function! sj#coffee#JoinFunction()
   let line = getline('.')
 
-  if line !~ '->'
+  if line !~ '[-=]>'
     return 0
   else
-    s/->\_s\+/-> /
+    s/\([-=]\)>\_s\+/\1> /
     return 1
   endif
 endfunction
@@ -60,6 +60,23 @@ function! sj#coffee#JoinIfClause()
   call s:SetBaseIndent(line('.'), line('.'), base_indent)
 
   return 1
+endfunction
+
+function! sj#coffee#SplitTernaryClause()
+  let line = getline('.')
+  let pattern = '\v^(.*)if (.*) then (.*) else ([^)]*)(.*)$'
+
+  if line =~ pattern
+    let body_when_true  = sj#ExtractRx(line, pattern, '\3')
+    let body_when_false = sj#ExtractRx(line, pattern, '\4')
+    let replacement     = "if \\2\r\\1".body_when_true."\\5\relse\r\\1".body_when_false."\\5"
+    exe 's/'.pattern.'/'.escape(replacement, '/')
+    normal! >>kk>>
+
+    return 1
+  else
+    return 0
+  endif
 endfunction
 
 function! sj#coffee#SplitObjectLiteral()
@@ -109,7 +126,7 @@ function! sj#coffee#JoinObjectLiteral()
 endfunction
 
 function! sj#coffee#SplitString()
-  if search('["'']', 'Wb', line('.')) <= 0
+  if search('["''].\{-}["'']\s*$', 'Wbc', line('.')) <= 0
     return 0
   endif
 
@@ -127,7 +144,7 @@ function! sj#coffee#SplitString()
 endfunction
 
 function! sj#coffee#JoinString()
-  if search('"""\|''''''', 'Wbc') <= 0
+  if search('\%("""\|''''''\)\s*$', 'Wbc') <= 0
     return 0
   endif
   let start       = getpos('.')

@@ -28,6 +28,8 @@ Into this:
 And another binding for the opposite transformation. This currently works for:
   * Various constructs in Ruby and Eruby
   * Various constructs in Coffeescript
+  * Various constructs in Perl
+  * PHP arrays
   * Python dicts and simple statements
   * Javascript object literals
   * Tags in HTML/XML

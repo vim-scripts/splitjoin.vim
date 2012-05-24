@@ -2,7 +2,7 @@ if exists("g:loaded_splitjoin") || &cp
   finish
 endif
 
-let g:loaded_splitjoin = '0.5.0' " version number
+let g:loaded_splitjoin = '0.5.1' " version number
 let s:keepcpo          = &cpo
 set cpo&vim
 
@@ -22,6 +22,10 @@ if !exists('g:splitjoin_coffee_suffix_if_clause')
   let g:splitjoin_coffee_suffix_if_clause = 1
 endif
 
+if !exists('g:splitjoin_perl_brace_on_same_line')
+  let g:splitjoin_perl_brace_on_same_line = 1
+endif
+
 " Public Interface:
 " =================
 
@@ -39,16 +43,16 @@ function! s:Split()
   " expand any folds under the cursor, or we might replace the wrong area
   silent! foldopen
 
-  call sj#PushCursor()
-
   for callback in b:splitjoin_split_callbacks
+    call sj#PushCursor()
+
     if call(callback, []) != 0
       silent! call repeat#set(":SplitjoinSplit\<cr>")
       break
     endif
-  endfor
 
-  call sj#PopCursor()
+    call sj#PopCursor()
+  endfor
 endfunction
 
 function! s:Join()
@@ -59,16 +63,16 @@ function! s:Join()
   " expand any folds under the cursor, or we might replace the wrong area
   silent! foldopen
 
-  call sj#PushCursor()
-
   for callback in b:splitjoin_join_callbacks
+    call sj#PushCursor()
+
     if call(callback, []) != 0
       silent! call repeat#set(":SplitjoinJoin\<cr>")
       break
     endif
-  endfor
 
-  call sj#PopCursor()
+    call sj#PopCursor()
+  endfor
 endfunction
 
 let &cpo = s:keepcpo
