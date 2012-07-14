@@ -24,7 +24,7 @@ endfunction
 function! sj#coffee#SplitIfClause()
   let line            = getline('.')
   let base_indent     = indent('.')
-  let suffix_pattern  = '\v(.*\S.*) (if|unless|while|until) (.*)'
+  let suffix_pattern  = '\v(.*\S.*) (if|unless|while|until|for) (.*)'
   let postfix_pattern = '\v(if|unless|while|until) (.*) then (.*)'
 
   if line =~ suffix_pattern
@@ -43,7 +43,7 @@ endfunction
 function! sj#coffee#JoinIfClause()
   let line        = getline('.')
   let base_indent = indent('.')
-  let pattern     = '\v^\s*(if|unless|while|until)'
+  let pattern     = '\v^\s*(if|unless|while|until|for)\ze\s'
 
   if line !~ pattern
     return 0
@@ -113,7 +113,7 @@ function! sj#coffee#JoinObjectLiteral()
     return 0
   endif
 
-  let lines = getbufline('%', start_line, end_line)
+  let lines = sj#GetLines(start_line, end_line)
   let lines = sj#TrimList(lines)
   let lines = map(lines, 'sj#Trim(v:val)')
   if g:splitjoin_normalize_whitespace

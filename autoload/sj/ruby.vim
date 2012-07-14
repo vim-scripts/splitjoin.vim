@@ -44,7 +44,7 @@ endfunction
 
 function! sj#ruby#SplitBlock()
   let line    = getline('.')
-  let pattern = '\v\{(\s*\|.{-}\|)?\s*(.*)\}'
+  let pattern = '\v\{(\s*\|.{-}\|)?\s*(.{-})\s*\}'
 
   if line =~ pattern
     call search('{', 'bc', line('.'))
@@ -105,43 +105,30 @@ function! sj#ruby#SplitCachingConstruct()
 endfunction
 
 function! sj#ruby#JoinCachingConstruct()
-  let line = getline('.')
+  let begin_line = getline('.')
+  let body_line  = getline(line('.') + 1)
+  let end_line   = getline(line('.') + 2)
 
-  if line =~ '||=\s\+begin'
-    let start_line_no    = line('.')
-    let end_line_pattern = '^'.repeat(' ', indent(start_line_no)).'end\s*$'
-    let end_line_no      = search(end_line_pattern, 'W')
+  if begin_line =~ '||=\s\+begin' && end_line =~ '^\s*end'
+    let lvalue      = substitute(begin_line, '\s\+||=\s\+begin.*$', '', '')
+    let body        = sj#Trim(body_line)
+    let replacement = lvalue.' ||= '.body
 
-    if end_line_no > 0
-      let lines = sj#GetLines(start_line_no, end_line_no)
+    call sj#ReplaceLines(line('.'), line('.') + 2, replacement)
 
-      let lvalue   = substitute(lines[0], '\s\+||=\s\+begin.*$', '', '')
-      let end_line = lines[-1] " unused
-      let body     = join(lines[1:-2], "\n")
-
-      let lvalue = sj#Trim(lvalue)
-      let body   = sj#Trim(body)
-      let body   = s:JoinLines(body)
-
-      let replacement = lvalue.' ||= '.body
-
-      call sj#ReplaceLines(start_line_no, end_line_no, replacement)
-
-      return 1
-    endif
+    return 1
+  else
+    return 0
   endif
-
-  return 0
 endfunction
 
 function! sj#ruby#JoinHash()
-  let line    = getline('.')
-  let pattern = '{\s*$'
+  let line = getline('.')
 
   if line =~ '{\s*$'
     return s:JoinHashWithCurlyBraces()
   elseif line =~ '(\s*$'
-    return sj#JoinHashWithRoundBraces()
+    return s:JoinHashWithRoundBraces()
   elseif line =~ ',\s*$'
     return s:JoinHashWithoutBraces()
   else
@@ -155,6 +142,7 @@ function! s:JoinHashWithCurlyBraces()
   if g:splitjoin_normalize_whitespace
     let body = sj#GetMotion('Vi{',)
     let body = substitute(body, '\s\+=>\s\+', ' => ', 'g')
+    let body = substitute(body, '\s\+\k\+\zs:\s\+', ': ', 'g')
     call sj#ReplaceMotion('Vi{', body)
   endif
 
@@ -177,21 +165,20 @@ function! s:JoinHashWithRoundBraces()
 endfunction
 
 function! s:JoinHashWithoutBraces()
-  let start_line = line('.')
+  let start_lineno = line('.')
+  let end_lineno   = start_lineno
+  let lineno       = nextnonblank(start_lineno + 1)
+  let line         = getline(lineno)
+  let indent       = repeat(' ', indent(lineno))
 
-  normal! j
-
-  let indent = repeat(' ', indent('.'))
-
-  let line = getline('.')
-  while (line =~ '^'.indent && line =~ '=>') || line =~ '^\s*)'
-    let end_line = line('.')
-    normal! j
-    let line = getline('.')
+  while lineno <= line('$') && ((line =~ '^'.indent && line =~ '=>') || line =~ '^\s*)')
+    let end_lineno = lineno
+    let lineno     = nextnonblank(lineno + 1)
+    let line       = getline(lineno)
   endwhile
 
-  call cursor(start_line, 0)
-  exe "normal! V".(end_line - start_line)."jJ"
+  call cursor(start_lineno, 0)
+  exe "normal! V".(end_lineno - start_lineno)."jJ"
 endfunction
 
 function! sj#ruby#SplitOptions()
@@ -201,52 +188,61 @@ function! sj#ruby#SplitOptions()
 
   if from < 0
     call sj#PushCursor()
-    let [from, to] = sj#argparser#ruby#LocateFunction()
-    let option_type = 'option'
+    let [from, to, function_type] = sj#argparser#ruby#LocateFunction()
     call sj#PopCursor()
+
+    let option_type = 'option'
   else
     let option_type = 'hash'
   endif
 
-  if from >= 0
-    let [from, to, args, opts, hash_type] = sj#argparser#ruby#ParseArguments(from, to, getline('.'))
-
-    if len(opts) < 1
-      " no options found, leave it as it is
-      return 0
-    endif
-
-    let replacement = ''
-
-    if len(args) > 0
-      let replacement .= join(args, ', ') . ', '
-    endif
-    if g:splitjoin_ruby_curly_braces || option_type == 'hash' || len(args) == 0
-      let replacement .= '{'
-    endif
-    let replacement .= "\n"
-    let replacement .= join(opts, ",\n")
-    if g:splitjoin_ruby_curly_braces || option_type == 'hash' || len(args) == 0
-      let replacement .= "\n}"
-    endif
-
-    call sj#ReplaceCols(from, to, replacement)
-
-    if g:splitjoin_align && hash_type != 'mixed'
-      let alignment_start = line('.') + 1
-      let alignment_end   = alignment_start + len(opts) - 1
-
-      if hash_type == 'classic'
-        call sj#Align(alignment_start, alignment_end, 'hashrocket')
-      elseif hash_type == 'new'
-        call sj#Align(alignment_start, alignment_end, 'json_object')
-      endif
-    endif
-
-    return 1
-  else
+  if from < 0
     return 0
   endif
+
+  let [from, to, args, opts, hash_type] = sj#argparser#ruby#ParseArguments(from, to, getline('.'))
+
+  if len(opts) < 1
+    " no options found, leave it as it is
+    return 0
+  endif
+
+  let replacement = ''
+
+  if len(args) > 0
+    let replacement .= join(args, ', ') . ','
+  endif
+  if !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces'
+    " don't add any opening delimiter, there's a "(" already
+  elseif option_type == 'hash' || len(args) == 0
+    let replacement .= '{'
+  elseif g:splitjoin_ruby_curly_braces
+    let replacement .= ' {'
+  endif
+  let replacement .= "\n"
+  let replacement .= join(opts, ",\n")
+  if !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces'
+    " add a newline, there's a ")" already
+    " Note: adding a space to avoid pasting issues
+    let replacement .= "\n "
+  elseif g:splitjoin_ruby_curly_braces || option_type == 'hash' || len(args) == 0
+    let replacement .= "\n}"
+  endif
+
+  call sj#ReplaceCols(from, to, replacement)
+
+  if g:splitjoin_align && hash_type != 'mixed'
+    let alignment_start = line('.') + 1
+    let alignment_end   = alignment_start + len(opts) - 1
+
+    if hash_type == 'classic'
+      call sj#Align(alignment_start, alignment_end, 'hashrocket')
+    elseif hash_type == 'new'
+      call sj#Align(alignment_start, alignment_end, 'json_object')
+    endif
+  endif
+
+  return 1
 endfunction
 
 " Helper functions
