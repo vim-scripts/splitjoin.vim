@@ -26,11 +26,15 @@ endfunction
 " Restores the cursor to the latest position in the cursor stack, as added
 " from the sj#PushCursor function. Removes the position from the stack.
 function! sj#PopCursor()
-  if !exists('b:cursor_position_stack')
-    let b:cursor_position_stack = []
-  endif
-
   call setpos('.', remove(b:cursor_position_stack, -1))
+endfunction
+
+" function! sj#DropCursor() {{{2
+"
+" Discards the last saved cursor position from the cursor stack.
+" Note that if the cursor hasn't been saved at all, this will raise an error.
+function! sj#DropCursor()
+  call remove(b:cursor_position_stack, -1)
 endfunction
 
 " function! sj#PeekCursor() {{{2
@@ -64,8 +68,8 @@ function! sj#ReplaceMotion(motion, text)
   let original_reg_type = getregtype('z')
 
   let @z = a:text
-  exec 'normal! '.a:motion.'"zp'
-  normal! gv=
+  exec 'silent normal! '.a:motion.'"zp'
+  silent normal! gv=
 
   call setreg('z', original_reg, original_reg_type)
 endfunction
@@ -190,6 +194,99 @@ function! sj#TrimList(list)
   return map(a:list, 'sj#Trim(v:val)')
 endfunction
 
+" Searching for patterns {{{1
+
+" function! sj#SearchUnderCursor(pattern, flags)
+"
+" Searches for a match for the given pattern under the cursor. Returns the
+" result of the |search()| call if a match was found, 0 otherwise.
+"
+" Moves the cursor unless the 'n' flag is given.
+"
+" The a:flags parameter can include one of "e", "p", "s", "n", which work the
+" same way as the built-in |search()| call. Any other flags will be ignored.
+"
+function! sj#SearchUnderCursor(pattern, ...)
+  let [match_start, match_end] = call('sj#SearchposUnderCursor', [a:pattern] + a:000)
+  if match_start > 0
+    return match_start
+  else
+    return 0
+  endif
+endfunction
+
+" function! sj#SearchposUnderCursor(pattern, flags)
+"
+" Searches for a match for the given pattern under the cursor. Returns the
+" start and (end + 1) column positions of the match. If nothing was found,
+" returns [0, 0].
+"
+" Moves the cursor unless the 'n' flag is given.
+"
+" See sj#SearchUnderCursor for the behaviour of a:flags
+"
+function! sj#SearchposUnderCursor(pattern, ...)
+  if a:0 > 0
+    let given_flags = a:1
+  else
+    let given_flags = ''
+  endif
+
+  let lnum        = line('.')
+  let col         = col('.')
+  let pattern     = a:pattern
+  let extra_flags = ''
+
+  " handle any extra flags provided by the user
+  for char in ['e', 'p', 's']
+    if stridx(given_flags, char) >= 0
+      let extra_flags .= char
+    endif
+  endfor
+
+  try
+    call sj#PushCursor()
+
+    " find the start of the pattern
+    call search(pattern, 'bcW', lnum)
+    let search_result = search(pattern, 'cW'.extra_flags, lnum)
+    if search_result <= 0
+      return [0, 0]
+    endif
+    let match_start = col('.')
+
+    " find the end of the pattern
+    call sj#PushCursor()
+    call search(pattern, 'cWe', lnum)
+    let match_end = col('.')
+
+    " set the end of the pattern to the next character, or EOL. Extra logic
+    " is for multibyte characters.
+    normal! l
+    if col('.') == match_end
+      " no movement, we must be at the end
+      let match_end = col('$')
+    else
+      let match_end = col('.')
+    endif
+    call sj#PopCursor()
+
+    if match_start > col || match_end <= col
+      " then the cursor is not in the pattern
+      return [0, 0]
+    else
+      " a match has been found
+      return [match_start, match_end]
+    endif
+  finally
+    if stridx(given_flags, 'n') >= 0
+      call sj#PopCursor()
+    else
+      call sj#DropCursor()
+    endif
+  endtry
+endfunction
+
 " Regex helpers {{{1
 
 " function! sj#ExtractRx(expr, pat, sub)
@@ -280,7 +377,7 @@ function! sj#LocateBracesOnLine(open, close)
   endif
 
   if found > 0
-    let from = col('.') - 1
+    let from = col('.')
     normal! %
     let to = col('.')
 

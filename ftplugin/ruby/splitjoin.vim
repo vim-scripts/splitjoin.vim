@@ -4,6 +4,7 @@ if !exists('b:splitjoin_split_callbacks')
         \ 'sj#ruby#SplitOptions',
         \ 'sj#ruby#SplitBlock',
         \ 'sj#ruby#SplitCachingConstruct',
+        \ 'sj#ruby#SplitString',
         \ ]
 endif
 
@@ -13,5 +14,7 @@ if !exists('b:splitjoin_join_callbacks')
         \ 'sj#ruby#JoinHash',
         \ 'sj#ruby#JoinIfClause',
         \ 'sj#ruby#JoinCachingConstruct',
+        \ 'sj#ruby#JoinContinuedMethodCall',
+        \ 'sj#ruby#JoinHeredoc',
         \ ]
 endif

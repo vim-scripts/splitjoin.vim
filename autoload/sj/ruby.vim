@@ -42,9 +42,10 @@ function! sj#ruby#JoinIfClause()
   return 0
 endfunction
 
+" TODO rewrite using SearchUnderCursor?
 function! sj#ruby#SplitBlock()
   let line    = getline('.')
-  let pattern = '\v\{(\s*\|.{-}\|)?\s*(.{-})\s*\}'
+  let pattern = '\v\{(\s*\|.{-}\|)?\s*(.{-})\s*\}\s*(#.*)?$'
 
   if line =~ pattern
     call search('{', 'bc', line('.'))
@@ -208,23 +209,45 @@ function! sj#ruby#SplitOptions()
   endif
 
   let replacement = ''
+  let alignment_start = line('.')
 
+  " first, prepare the already-existing arguments
   if len(args) > 0
     let replacement .= join(args, ', ') . ','
   endif
-  if !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces'
-    " don't add any opening delimiter, there's a "(" already
-  elseif option_type == 'hash' || len(args) == 0
-    let replacement .= '{'
+
+  " add opening brace
+  if !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces' && len(args) > 0
+    " Example: User.new(:one, :two => 'three')
+    "
+    let replacement .= "\n"
+    let alignment_start += 1
+  elseif !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_spaces' && len(args) > 0
+    " Example: User.new :one, :two => 'three'
+    "
+    let replacement .= "\n"
+    let alignment_start += 1
+  elseif !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces' && len(args) == 0
+    " Example: User.new(:two => 'three')
+    "
+    " no need to add anything
+  elseif g:splitjoin_ruby_curly_braces && (option_type == 'hash' || function_type == 'with_round_braces')
+    " Example: one = {:two => 'three'}
+    "
+    let replacement .= "{\n"
+    let alignment_start += 1
   elseif g:splitjoin_ruby_curly_braces
-    let replacement .= ' {'
+    " add braces in all other cases
+    let replacement .= " {\n"
+    let alignment_start += 1
   endif
-  let replacement .= "\n"
+
+  " add options
   let replacement .= join(opts, ",\n")
+
+  " add closing brace
   if !g:splitjoin_ruby_curly_braces && option_type == 'option' && function_type == 'with_round_braces'
-    " add a newline, there's a ")" already
-    " Note: adding a space to avoid pasting issues
-    let replacement .= "\n "
+    " no need to add anything
   elseif g:splitjoin_ruby_curly_braces || option_type == 'hash' || len(args) == 0
     let replacement .= "\n}"
   endif
@@ -232,8 +255,7 @@ function! sj#ruby#SplitOptions()
   call sj#ReplaceCols(from, to, replacement)
 
   if g:splitjoin_align && hash_type != 'mixed'
-    let alignment_start = line('.') + 1
-    let alignment_end   = alignment_start + len(opts) - 1
+    let alignment_end = alignment_start + len(opts) - 1
 
     if hash_type == 'classic'
       call sj#Align(alignment_start, alignment_end, 'hashrocket')
@@ -255,4 +277,106 @@ function! s:JoinLines(text)
   else
     return join(lines, '; ')
   endif
+endfunction
+
+function! sj#ruby#JoinContinuedMethodCall()
+  if getline('.') !~ '\.$'
+    return 0
+  endif
+
+  let start_lineno = line('.')
+  silent! normal! zO
+  normal! j
+
+  while line('.') < line('$') && getline('.') =~ '\.$'
+    normal! j
+  endwhile
+
+  let end_lineno = line('.') - 1
+
+  exe start_lineno.','.end_lineno.'s/\n\_s*//'
+endfunction
+
+function! sj#ruby#JoinHeredoc()
+  let heredoc_pattern = '<<-\?\([^ \t,]\+\)'
+
+  if sj#SearchUnderCursor(heredoc_pattern) <= 0
+    return 0
+  endif
+
+  let start_lineno      = line('.')
+  let remainder_of_line = sj#GetCols(col('.'), col('$'))
+  let delimiter         = sj#ExtractRx(remainder_of_line, heredoc_pattern, '\1')
+
+  " we won't be needing the rest of the line
+  normal! "_D
+
+  if search('^\s*'.delimiter.'\s*$', 'W') <= 0
+    return 0
+  endif
+
+  let end_lineno = line('.')
+
+  if end_lineno - start_lineno > 1
+    let lines = sj#GetLines(start_lineno + 1, end_lineno - 1)
+    let lines = sj#TrimList(lines)
+    let body  = join(lines, " ")
+  else
+    let body = ''
+  endif
+
+  if body =~ '\%(#{\|''\)'
+    let quoted_body = '"'.escape(escape(body, '"'), '\').'"'
+  else
+    let quoted_body = "'".body."'"
+  endif
+
+  let replacement = getline(start_lineno).substitute(remainder_of_line, heredoc_pattern, quoted_body, '')
+  call sj#ReplaceLines(start_lineno, end_lineno, replacement)
+  undojoin " with the 'normal! D'
+
+  return 1
+endfunction
+
+function! sj#ruby#SplitString()
+  let string_pattern       = '\(\%(^\|[^\\]\)\zs\([''"]\)\).\{-}[^\\]\+\2'
+  let empty_string_pattern = '\%(''''\|""\)'
+
+  let [match_start, match_end] = sj#SearchposUnderCursor(string_pattern)
+  if match_start <= 0
+    let [match_start, match_end] = sj#SearchposUnderCursor(empty_string_pattern)
+    if match_start <= 0
+      return 0
+    endif
+  endif
+
+  let string    = sj#GetCols(match_start, match_end - 1)
+  let delimiter = string[0]
+
+  if match_end - match_start > 2
+    let string_body = sj#GetCols(match_start + 1, match_end - 2)."\n"
+  else
+    let string_body = ''
+  endif
+
+  if delimiter == '"'
+    let string_body = substitute(string_body, '\\"', '"', 'g')
+  elseif delimiter == "'"
+    let string_body = substitute(string_body, "\\''", "'", 'g')
+  endif
+
+  if g:splitjoin_ruby_heredoc_type == '<<-'
+    call sj#ReplaceCols(match_start, match_end - 1, '<<-EOF')
+    let replacement = getline('.')."\n".string_body."EOF"
+    call sj#ReplaceMotion('V', replacement)
+  elseif g:splitjoin_ruby_heredoc_type == '<<'
+    call sj#ReplaceCols(match_start, match_end - 1, '<<EOF')
+    let replacement = getline('.')."\n".string_body."EOF"
+    call sj#ReplaceMotion('V', replacement)
+    exe (line('.') + 1).','.(line('.') + 2).'s/^\s*//'
+  else
+    throw 'Unknown value for g:splitjoin_ruby_heredoc_type, "'.g:splitjoin_ruby_heredoc_type.'"'
+  endif
+
+  return 1
 endfunction
