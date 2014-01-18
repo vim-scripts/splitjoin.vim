@@ -1,3 +1,5 @@
+*splitjoin.txt* 	Switch between single-line and multiline forms of code
+
 ==============================================================================
 CONTENTS                                      *splitjoin* *splitjoin-contents*
 
@@ -15,6 +17,7 @@ CONTENTS                                      *splitjoin* *splitjoin-contents*
     CSS....................................: |splitjoin-css|
     YAML...................................: |splitjoin-yaml|
     Eruby..................................: |splitjoin-eruby|
+    Go.....................................: |splitjoin-go|
     Settings...............................: |splitjoin-settings|
     Internals..............................: |splitjoin-internals|
     Issues.................................: |splitjoin-issues|
@@ -42,6 +45,9 @@ directory: plugin, ftplugin, autoload, doc.
 
 ==============================================================================
 USAGE                                                        *splitjoin-usage*
+
+                                                           *SplitjoinSplit* *gS*
+                                                           *SplitjoinJoin*  *gJ*
 
 After the plugin is installed, the mapping |gS| will perform splitting and |gJ|
 -- joining of the code under the cursor. These mappings are configurable
@@ -530,6 +536,19 @@ Arrays ~
         - 'three'
         - 'four'
 <
+Maps ~
+>
+    root:
+      one: { foo: bar }
+      two: { three: ['four', 'five'], six: seven }
+
+    root:
+      one:
+        foo: bar
+      two:
+        three: ['four', 'five']
+        six: seven
+<
 
 ==============================================================================
 ERUBY                                                        *splitjoin-eruby*
@@ -568,6 +587,20 @@ Option hashes ~
       :class => 'google',
       :id => 'google-link'
     } %>
+<
+
+==============================================================================
+GO                                                                *splitjoin-go*
+
+Structs ~
+>
+    StructType{one: 1, two: "asdf", three: []int{1, 2, 3}}
+
+    StructType{
+        one: 1,
+        two: "asdf",
+        three: []int{1, 2, 3},
+    }
 <
 
 ==============================================================================

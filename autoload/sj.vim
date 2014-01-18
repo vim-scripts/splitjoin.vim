@@ -9,7 +9,7 @@
 "   call sj#PushCursor()
 "   " Do stuff that move the cursor around
 "   call sj#PopCursor()
-
+"
 " function! sj#PushCursor() {{{2
 "
 " Adds the current cursor position to the cursor stack.
@@ -64,14 +64,19 @@ endfunction
 " Note that the motion needs to include a visual mode key, like "V", "v" or
 " "gv"
 function! sj#ReplaceMotion(motion, text)
-  let original_reg      = getreg('z')
-  let original_reg_type = getregtype('z')
+  " reset clipboard to avoid problems with 'unnamed' and 'autoselect'
+  let saved_clipboard = &clipboard
+  set clipboard=
 
-  let @z = a:text
-  exec 'silent normal! '.a:motion.'"zp'
+  let saved_register_text = getreg('"', 1)
+  let saved_register_type = getregtype('"')
+
+  call setreg('"', a:text, 'v')
+  exec 'silent normal! '.a:motion.'p'
   silent normal! gv=
 
-  call setreg('z', original_reg, original_reg_type)
+  call setreg('"', saved_register_text, saved_register_type)
+  let &clipboard = saved_clipboard
 endfunction
 
 " function! sj#ReplaceLines(start, end, text) {{{2
@@ -87,19 +92,14 @@ endfunction
 "
 " Replace the area defined by the 'start' and 'end' columns on the current
 " line with 'text'
-"
-" TODO Multibyte characters break it
 function! sj#ReplaceCols(start, end, text)
-  let start    = a:start - 1
-  let interval = a:end - a:start
+  let start_position = getpos('.')
+  let end_position   = getpos('.')
 
-  if start > 0
-    let motion = '0'.start.'lv'.interval.'l'
-  else
-    let motion = '0v'.interval.'l'
-  endif
+  let start_position[2] = a:start
+  let end_position[2]   = a:end
 
-  return sj#ReplaceMotion(motion, a:text)
+  return sj#ReplaceByPosition(start_position, end_position, a:text)
 endfunction
 
 " function! sj#ReplaceByPosition(start, end, text) {{{2
@@ -120,7 +120,7 @@ endfunction
 "
 " These functions are similar to the text replacement functions, only retrieve
 " the text instead.
-
+"
 " function! sj#GetMotion(motion) {{{2
 "
 " Execute the normal mode motion "motion" and return the text it marks.
@@ -130,13 +130,13 @@ endfunction
 function! sj#GetMotion(motion)
   call sj#PushCursor()
 
-  let original_reg      = getreg('z')
-  let original_reg_type = getregtype('z')
+  let saved_register_text = getreg('z', 1)
+  let saved_register_type = getregtype('z')
 
-  exec 'normal! '.a:motion.'"zy'
+  exec 'silent normal! '.a:motion.'"zy'
   let text = @z
 
-  call setreg('z', original_reg, original_reg_type)
+  call setreg('z', saved_register_text, saved_register_type)
   call sj#PopCursor()
 
   return text
@@ -195,8 +195,8 @@ function! sj#TrimList(list)
 endfunction
 
 " Searching for patterns {{{1
-
-" function! sj#SearchUnderCursor(pattern, flags)
+"
+" function! sj#SearchUnderCursor(pattern, flags) {{{2
 "
 " Searches for a match for the given pattern under the cursor. Returns the
 " result of the |search()| call if a match was found, 0 otherwise.
@@ -215,7 +215,7 @@ function! sj#SearchUnderCursor(pattern, ...)
   endif
 endfunction
 
-" function! sj#SearchposUnderCursor(pattern, flags)
+" function! sj#SearchposUnderCursor(pattern, flags) {{{2
 "
 " Searches for a match for the given pattern under the cursor. Returns the
 " start and (end + 1) column positions of the match. If nothing was found,
@@ -287,9 +287,53 @@ function! sj#SearchposUnderCursor(pattern, ...)
   endtry
 endfunction
 
-" Regex helpers {{{1
+" function! sj#SearchSkip(pattern, skip, ...) {{{2
+" A partial replacement to search() that consults a skip pattern when
+" performing a search, just like searchpair().
+"
+" Note that it doesn't accept the "n" and "c" flags due to implementation
+" difficulties.
+function! sj#SearchSkip(pattern, skip, ...)
+  " collect all of our arguments
+  let pattern = a:pattern
+  let skip    = a:skip
 
-" function! sj#ExtractRx(expr, pat, sub)
+  if a:0 >= 1
+    let flags = a:1
+  else
+    let flags = ''
+  endif
+
+  if stridx(flags, 'n') > -1 || stridx(flags, 'c') > -1
+    echoerr "Doesn't work with 'n' or 'c' flags, was given: ".flags
+    return
+  endif
+
+  let stopline = (a:0 >= 2) ? a:2 : 0
+  let timeout  = (a:0 >= 3) ? a:3 : 0
+
+  " just delegate to search() directly if no skip expression was given
+  if skip == ''
+    return search(pattern, flags, stopline, timeout)
+  endif
+
+  " search for the pattern, skipping a match if necessary
+  let skip_match = 1
+  while skip_match
+    let match = search(pattern, flags, stopline, timeout)
+    if match && eval(skip)
+      let skip_match = 1
+    else
+      let skip_match = 0
+    endif
+  endwhile
+
+  return match
+endfunction
+
+" Regex helpers {{{1
+"
+" function! sj#ExtractRx(expr, pat, sub) {{{2
 "
 " Extract a regex match from a string. Ordinarily, substitute() would be used
 " for this, but it's a bit too cumbersome for extracting a particular grouped
@@ -334,6 +378,8 @@ function! s:Tabularize(from, to, type)
     let pattern = '^[^=>]*\zs=>'
   elseif a:type == 'css_declaration' || a:type == 'json_object'
     let pattern = '^[^:]*:\s*\zs\s/l0'
+  elseif a:type == 'lua_table'
+    let pattern = '^[^=]*\zs='
   else
     return
   endif
@@ -357,23 +403,35 @@ endfunction
 " braces on the current line. The a:open and a:close parameters are the
 " opening and closing brace characters to look for.
 "
+" The optional parameters are the syntaxes to skip while searching.
+"
 " If a pair is not found on the line, returns [-1, -1]
 "
 " Examples:
 "
 "   let [start, end] = sj#LocateBracesOnLine('{', '}')
+"   let [start, end] = sj#LocateBracesOnLine('{', '}', 'rubyString')
 "   let [start, end] = sj#LocateBracesOnLine('[', ']')
 "
-function! sj#LocateBracesOnLine(open, close)
+function! sj#LocateBracesOnLine(open, close, ...)
   let [_bufnum, line, col, _off] = getpos('.')
 
+  " bail early if there's obviously no match
   if getline('.') !~ a:open.'.*'.a:close
     return [-1, -1]
   endif
 
-  let found = searchpair(a:open, '', a:close, 'cb', '', line('.'))
+  " optional skip parameter
+  if a:0 > 0
+    let skip = s:SkipSyntax(a:1)
+  else
+    let skip = ''
+  endif
+
+  " try looking backwards, then forwards
+  let found = searchpair(a:open, '', a:close, 'cb', skip, line('.'))
   if found <= 0
-    let found = search(a:open, '', '', line('.'))
+    let found = sj#SearchSkip(a:open.'.*'.a:close, skip, '', line('.'))
   endif
 
   if found > 0
@@ -425,4 +483,11 @@ function! sj#ParseJsonObjectBody(from, to)
   let parser = sj#argparser#js#Construct(a:from, a:to, getline('.'))
   call parser.Process()
   return parser.args
+endfunction
+
+function! s:SkipSyntax(...)
+  let syntax_groups = a:000
+  let skip_pattern  = '\%('.join(syntax_groups, '\|').'\)'
+
+  return "synIDattr(synID(line('.'),col('.'),1),'name') =~ '".skip_pattern."'"
 endfunction
