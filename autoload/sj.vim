@@ -37,6 +37,39 @@ function! sj#DropCursor()
   call remove(b:cursor_position_stack, -1)
 endfunction
 
+" Indenting {{{1
+"
+" Some languages don't have built-in support, and some languages have semantic
+" indentation. In such cases, code blocks might need to be reindented
+" manually.
+"
+
+" function! sj#SetIndent(start_lineno, end_lineno, indent) {{{2
+" function! sj#SetIndent(lineno, indent)
+"
+" Sets the indent of the given line numbers to "indent" amount of whitespace.
+" For now, works only with spaces, not with tabs.
+"
+function! sj#SetIndent(...)
+  if a:0 == 3
+    let start_lineno = a:1
+    let end_lineno   = a:2
+    let indent       = a:3
+  elseif a:0 == 2
+    let start_lineno = a:1
+    let end_lineno   = a:1
+    let indent       = a:2
+  endif
+
+  let whitespace = repeat(' ', indent)
+
+  exe start_lineno.','.end_lineno.'s/^\s*/'.whitespace
+
+  " Don't leave a history entry
+  call histdel('search', -1)
+  let @/ = histget('search', -1)
+endfunction
+
 " function! sj#PeekCursor() {{{2
 "
 " Returns the last saved cursor position from the cursor stack.
@@ -196,7 +229,7 @@ endfunction
 
 " Searching for patterns {{{1
 "
-" function! sj#SearchUnderCursor(pattern, flags) {{{2
+" function! sj#SearchUnderCursor(pattern, flags, skip) {{{2
 "
 " Searches for a match for the given pattern under the cursor. Returns the
 " result of the |search()| call if a match was found, 0 otherwise.
@@ -215,7 +248,7 @@ function! sj#SearchUnderCursor(pattern, ...)
   endif
 endfunction
 
-" function! sj#SearchposUnderCursor(pattern, flags) {{{2
+" function! sj#SearchposUnderCursor(pattern, flags, skip) {{{2
 "
 " Searches for a match for the given pattern under the cursor. Returns the
 " start and (end + 1) column positions of the match. If nothing was found,
@@ -223,13 +256,21 @@ endfunction
 "
 " Moves the cursor unless the 'n' flag is given.
 "
+" Respects the skip expression if it's given.
+"
 " See sj#SearchUnderCursor for the behaviour of a:flags
 "
 function! sj#SearchposUnderCursor(pattern, ...)
-  if a:0 > 0
+  if a:0 >= 1
     let given_flags = a:1
   else
     let given_flags = ''
+  endif
+
+  if a:0 >= 2
+    let skip = a:2
+  else
+    let skip = ''
   endif
 
   let lnum        = line('.')
@@ -249,7 +290,7 @@ function! sj#SearchposUnderCursor(pattern, ...)
 
     " find the start of the pattern
     call search(pattern, 'bcW', lnum)
-    let search_result = search(pattern, 'cW'.extra_flags, lnum)
+    let search_result = sj#SearchSkip(pattern, skip, 'cW'.extra_flags, lnum)
     if search_result <= 0
       return [0, 0]
     endif
@@ -257,7 +298,7 @@ function! sj#SearchposUnderCursor(pattern, ...)
 
     " find the end of the pattern
     call sj#PushCursor()
-    call search(pattern, 'cWe', lnum)
+    call sj#SearchSkip(pattern, skip, 'cWe', lnum)
     let match_end = col('.')
 
     " set the end of the pattern to the next character, or EOL. Extra logic
@@ -271,7 +312,7 @@ function! sj#SearchposUnderCursor(pattern, ...)
     endif
     call sj#PopCursor()
 
-    if match_start > col || match_end <= col
+    if !sj#ColBetween(col, match_start, match_end)
       " then the cursor is not in the pattern
       return [0, 0]
     else
@@ -304,8 +345,8 @@ function! sj#SearchSkip(pattern, skip, ...)
     let flags = ''
   endif
 
-  if stridx(flags, 'n') > -1 || stridx(flags, 'c') > -1
-    echoerr "Doesn't work with 'n' or 'c' flags, was given: ".flags
+  if stridx(flags, 'n') > -1
+    echoerr "Doesn't work with 'n' flag, was given: ".flags
     return
   endif
 
@@ -321,6 +362,10 @@ function! sj#SearchSkip(pattern, skip, ...)
   let skip_match = 1
   while skip_match
     let match = search(pattern, flags, stopline, timeout)
+
+    " remove 'c' flag for any run after the first
+    let flags = substitute(flags, 'c', '', 'g')
+
     if match && eval(skip)
       let skip_match = 1
     else
@@ -329,6 +374,25 @@ function! sj#SearchSkip(pattern, skip, ...)
   endwhile
 
   return match
+endfunction
+
+function! sj#SkipSyntax(...)
+  let syntax_groups = a:000
+  let skip_pattern  = '\%('.join(syntax_groups, '\|').'\)'
+
+  return "synIDattr(synID(line('.'),col('.'),1),'name') =~ '".skip_pattern."'"
+endfunction
+
+" Checks if the current position of the cursor is within the given limits.
+"
+function! sj#CursorBetween(start, end)
+  return sj#ColBetween(col('.'), a:start, a:end)
+endfunction
+
+" Checks if the given column is within the given limits.
+"
+function! sj#ColBetween(col, start, end)
+  return a:start <= a:col && a:end > a:col
 endfunction
 
 " Regex helpers {{{1
@@ -380,6 +444,8 @@ function! s:Tabularize(from, to, type)
     let pattern = '^[^:]*:\s*\zs\s/l0'
   elseif a:type == 'lua_table'
     let pattern = '^[^=]*\zs='
+  elseif a:type == 'when_then'
+    let pattern = 'then'
   else
     return
   endif
@@ -392,6 +458,8 @@ function! s:Align(from, to, type)
     let pattern = 'l: =>'
   elseif a:type == 'css_declaration' || a:type == 'json_object'
     let pattern = 'lp0W0 :\s*\zs'
+  elseif a:type == 'when_then'
+    let pattern = 'l: then'
   else
     return
   endif
@@ -415,23 +483,24 @@ endfunction
 "
 function! sj#LocateBracesOnLine(open, close, ...)
   let [_bufnum, line, col, _off] = getpos('.')
+  let search_pattern = '\V'.a:open.'\m.*\V'.a:close
 
   " bail early if there's obviously no match
-  if getline('.') !~ a:open.'.*'.a:close
+  if getline('.') !~ search_pattern
     return [-1, -1]
   endif
 
   " optional skip parameter
   if a:0 > 0
-    let skip = s:SkipSyntax(a:1)
+    let skip = sj#SkipSyntax(a:1)
   else
     let skip = ''
   endif
 
   " try looking backwards, then forwards
-  let found = searchpair(a:open, '', a:close, 'cb', skip, line('.'))
+  let found = searchpair('\V'.a:open, '', '\V'.a:close, 'cb', skip, line('.'))
   if found <= 0
-    let found = sj#SearchSkip(a:open.'.*'.a:close, skip, '', line('.'))
+    let found = sj#SearchSkip(search_pattern, skip, '', line('.'))
   endif
 
   if found > 0
@@ -483,11 +552,4 @@ function! sj#ParseJsonObjectBody(from, to)
   let parser = sj#argparser#js#Construct(a:from, a:to, getline('.'))
   call parser.Process()
   return parser.args
-endfunction
-
-function! s:SkipSyntax(...)
-  let syntax_groups = a:000
-  let skip_pattern  = '\%('.join(syntax_groups, '\|').'\)'
-
-  return "synIDattr(synID(line('.'),col('.'),1),'name') =~ '".skip_pattern."'"
 endfunction
